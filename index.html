@@ -1,0 +1,1534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Premium Smart Reader & Vocab Workspace</title>
+    
+    <!-- PWA Core Headers Configuration -->
+    <meta name="theme-color" content="#1a1a1a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    
+    <!-- External Framework Scripts Dependencies -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/epubjs@0.3.93/dist/epub.min.js"></script>
+
+    <style>
+        :root {
+            --bg-primary: #121212;
+            --bg-secondary: #1e1e1e;
+            --text-primary: #e0e0e0;
+            --text-secondary: #aaaaaa;
+            --accent-glow: #00adb5;
+            --border-subtle: #2d2d2d;
+            --card-vocab: #1a262b;
+            --highlight-color: rgba(244, 208, 63, 0.4);
+            --font-ui: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        body.light-theme {
+            --bg-primary: #fdfaf2;
+            --bg-secondary: #f4eee1;
+            --text-primary: #2b2b2b;
+            --text-secondary: #666666;
+            --accent-glow: #007a87;
+            --border-subtle: #e4dac5;
+            --card-vocab: #edf5f7;
+            --highlight-color: rgba(230, 126, 34, 0.35);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            font-family: var(--font-ui);
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            overflow: hidden;
+        }
+
+        /* Prevent Default Text Selection Menus on Mobile Layer */
+        .no-select {
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        /* Layout Structure Grid */
+        #app-container {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        header {
+            height: 56px;
+            background-color: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-subtle);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px;
+            z-index: 10;
+        }
+
+        .header-title {
+            font-size: 16px;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 40%;
+        }
+
+        .header-controls {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        button {
+            background: none;
+            border: none;
+            color: var(--text-primary);
+            cursor: pointer;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            background-color: rgba(255,255,255,0.04);
+            border: 1px solid var(--border-subtle);
+            transition: all 0.2s ease;
+        }
+
+        body.light-theme button {
+            background-color: rgba(0,0,0,0.03);
+        }
+
+        button:active {
+            transform: scale(0.95);
+            background-color: var(--accent-glow);
+            color: #ffffff;
+        }
+
+        #viewport-wrapper {
+            flex: 1;
+            position: relative;
+            width: 100%;
+            height: calc(100% - 112px);
+        }
+
+        #book-viewer {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Persistent Navigation Hotspots Overlay */
+        .nav-hotspot {
+            position: absolute;
+            top: 56px;
+            bottom: 56px;
+            width: 15%;
+            z-index: 5;
+            cursor: pointer;
+        }
+        #left-hotspot { left: 0; }
+        #right-hotspot { right: 0; }
+
+        /* Audio Control Controller Bar Placement */
+        #audio-controller-bar {
+            height: 56px;
+            background-color: var(--bg-secondary);
+            border-top: 1px solid var(--border-subtle);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px;
+            z-index: 10;
+        }
+
+        /* Global View Panels Structure (Library, Vocab Dashboard, Search) */
+        .fullscreen-panel {
+            position: absolute;
+            top: 56px;
+            left: 0;
+            width: 100%;
+            height: calc(100% - 56px);
+            background-color: var(--bg-primary);
+            z-index: 20;
+            transform: translateY(100%);
+            transition: transform 0.3s cubic-bezier(0.1, 0.9, 0.2, 1);
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .fullscreen-panel.active {
+            transform: translateY(0);
+        }
+
+        /* Shelf Library Matrix Styles */
+        .library-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+            gap: 20px;
+            margin-top: 16px;
+        }
+
+        .book-card {
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .book-cover-placeholder {
+            width: 90px;
+            height: 120px;
+            background-color: var(--border-subtle);
+            border-radius: 4px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            color: var(--text-secondary);
+            background-size: cover;
+            background-position: center;
+        }
+
+        .book-title-label {
+            font-size: 12px;
+            font-weight: 600;
+            line-height: 1.3;
+            max-height: 3.2em;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+        }
+
+        .book-progress-badge {
+            font-size: 10px;
+            color: var(--accent-glow);
+            margin-top: 4px;
+        }
+
+        /* Vocabulary Dashboard Workspace Styles */
+        .vocab-header-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--border-subtle);
+            padding-bottom: 12px;
+        }
+
+        .vocab-card {
+            background-color: var(--card-vocab);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .vocab-card-main {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .vocab-word-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--accent-glow);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .vocab-definition-block {
+            margin-top: 8px;
+            font-size: 14px;
+            line-height: 1.5;
+            white-space: pre-line;
+        }
+
+        .vocab-examples-toggle {
+            margin-top: 12px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .vocab-examples-panel {
+            margin-top: 12px;
+            border-top: 1px dashed var(--border-subtle);
+            padding-top: 12px;
+            display: none;
+        }
+
+        .vocab-examples-panel.open {
+            display: block;
+        }
+
+        .example-item-row {
+            font-size: 13px;
+            margin-bottom: 10px;
+            padding-left: 8px;
+            border-left: 2px solid var(--accent-glow);
+        }
+
+        .example-translation {
+            color: var(--text-secondary);
+            font-style: italic;
+            margin-top: 2px;
+        }
+
+        /* Global Search Infrastructure Panel Styles */
+        .search-input-group {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .search-input-field {
+            flex: 1;
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-primary);
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .search-results-container {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .search-result-snippet {
+            background-color: var(--bg-secondary);
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid var(--border-subtle);
+            cursor: pointer;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .search-result-snippet mark {
+            background-color: var(--highlight-color);
+            color: inherit;
+            font-weight: 600;
+        }
+
+        /* Calibration Controls Modal Panel Overlay */
+        #settings-panel {
+            position: absolute;
+            bottom: 56px;
+            right: 16px;
+            width: 280px;
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            padding: 16px;
+            z-index: 30;
+            display: none;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+
+        .settings-control-row {
+            margin-bottom: 12px;
+        }
+
+        .settings-control-row label {
+            display: block;
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .settings-control-row select, .settings-control-row input[type="range"] {
+            width: 100%;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-subtle);
+            padding: 6px;
+            border-radius: 4px;
+        }
+
+        .badge-count {
+            background-color: var(--accent-glow);
+            color: white;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            margin-left: 4px;
+        }
+
+        /* Floating Flash Word Lookup Modal */
+        #lookup-modal {
+            position: fixed;
+            bottom: 80px;
+            left: 5%;
+            width: 90%;
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--accent-glow);
+            border-radius: 10px;
+            padding: 16px;
+            z-index: 100;
+            display: none;
+            box-shadow: 0 -4px 25px rgba(0,0,0,0.6);
+        }
+    </style>
+</head>
+<body>
+
+<div id="app-container">
+    <!-- Header Block Component -->
+    <header class="no-select">
+        <button id="btn-library">Shelf Library</button>
+        <div class="header-title" id="display-book-title">No Book Loaded</div>
+        <div class="header-controls">
+            <button id="btn-search">🔍</button>
+            <button id="btn-vocab">Dashboard <span id="vocab-badge" class="badge-count">0</span></button>
+            <button id="btn-theme">🌓</button>
+        </div>
+    </header>
+
+    <!-- Reading Render Target Viewport -->
+    <div id="viewport-wrapper">
+        <div id="left-hotspot" class="nav-hotspot"></div>
+        <div id="right-hotspot" class="nav-hotspot"></div>
+        <div id="book-viewer"></div>
+    </div>
+
+    <!-- Audio Control Panel Layout Footer Component -->
+    <footer id="audio-controller-bar" class="no-select">
+        <button id="btn-audio-prev">⏮️ Skip Back</button>
+        <button id="btn-audio-play" style="min-width: 90px; font-weight: bold;">▶️ Read</button>
+        <button id="btn-audio-stop">⏹️ Stop</button>
+        <button id="btn-audio-settings">⚙️ Voice</button>
+    </footer>
+
+    <!-- Interactive Calibration Settings Panel View Overlay -->
+    <div id="settings-panel" class="no-select">
+        <div class="settings-control-row">
+            <label for="select-voice-en">English Voice Narrator Pack</label>
+            <select id="select-voice-en"></select>
+        </div>
+        <div class="settings-control-row">
+            <label for="select-voice-zh">Mandarin Translation Voice Pack</label>
+            <select id="select-voice-zh"></select>
+        </div>
+        <div class="settings-control-row">
+            <label id="label-rate-slider">Narration Speed Rate: 1.0x</label>
+            <input type="range" id="slider-audio-rate" min="0.5" max="2.0" step="0.1" value="1.0">
+        </div>
+        <button id="btn-close-settings" style="width:100%; margin-top:4px;">Apply Changes</button>
+    </div>
+
+    <!-- Bookshelf Layer Panel Component -->
+    <div id="panel-library" class="fullscreen-panel">
+        <h2>My Storage Bookshelf</h2>
+        <div style="margin: 16px 0;">
+            <input type="file" id="file-uploader" accept=".epub" style="display: none;">
+            <button id="btn-trigger-upload" style="background-color: var(--accent-glow); color: white;">+ Import Local EPUB File</button>
+        </div>
+        <div class="library-grid" id="library-shelf-container"></div>
+    </div>
+
+    <!-- Vocabulary Engine Dashboard Manager Panel Component -->
+    <div id="panel-vocab" class="fullscreen-panel">
+        <div class="vocab-header-actions">
+            <h2>Active Vocabulary Matrix Workspace</h2>
+            <div style="display:flex; gap:8px;">
+                <button id="btn-vocab-export" style="background-color: var(--accent-glow); color:white;">💾 Export JSON</button>
+                <button id="btn-vocab-close">Return to Reading</button>
+            </div>
+        </div>
+        <div id="vocab-cards-list-target"></div>
+    </div>
+
+    <!-- Offline Book Search Matrix Panel Component -->
+    <div id="panel-search" class="fullscreen-panel">
+        <h2>Search Book Contents</h2>
+        <div class="search-input-group">
+            <input type="text" id="input-search-query" class="search-input-field" placeholder="Type keywords or character names...">
+            <button id="btn-execute-search">Search Spine</button>
+            <button id="btn-close-search">Close</button>
+        </div>
+        <div class="search-results-container" id="search-results-target"></div>
+    </div>
+
+    <!-- Temporary Flash Word Lookup Translation Target UI Interface Box -->
+    <div id="lookup-modal">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
+            <h3 id="lookup-target-word" style="color: var(--accent-glow);">Word Lookup</h3>
+            <button id="btn-close-lookup">✕</button>
+        </div>
+        <div id="lookup-loading-spinner" style="font-size:13px; font-style:italic; color:var(--text-secondary);">Querying cloud translation engine...</div>
+        <div id="lookup-payload-content" style="display:none;">
+            <p id="lookup-translation-text" style="font-size:15px; font-weight:600; margin-bottom:8px; white-space:pre-line;"></p>
+            <button id="btn-save-lookup-word" style="font-size:12px; background-color:var(--accent-glow); color:white; width:100%;">Add to Master Vocabulary Log</button>
+        </div>
+    </div>
+</div>
+
+<script>
+/**
+ * CORE DATA INFRASTRUCTURE STORAGE AND LIFECYCLE MANAGEMENT ENGINE
+ */
+let db = null;
+const DB_NAME = "SmartReaderEngineDB";
+const DB_VERSION = 1;
+
+// Global Operational In-Memory App States
+let currentBookInstance = null;
+let currentRenditionInstance = null;
+let currentBookKey = null;
+let activeVocabDictionary = [];
+let localHighlightsManifest = {}; // Maps CFI string keys to highlight context payload configurations
+let activeWakeLockToken = null;
+
+// Speech Generation Audio State Variables
+let speechEngineQueueArray = [];
+let currentSpeechItemPointerIndex = -1;
+let isAudioCurrentlyPlaying = false;
+let globalPlaybackRateMultiplier = 1.0;
+let preferredEnglishVoiceProfile = null;
+let preferredMandarinVoiceProfile = null;
+
+// Touch/Gesture Debounce Tracking Arrays
+let clientTouchInteractionTimerRef = null;
+
+/**
+ * INDEXEDDB BACKEND MEMORY BANK STORAGE ROUTINES INITIALIZATION
+ */
+function initDatabaseStorageEngine() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        
+        request.onupgradeneeded = function(e) {
+            const databaseRef = e.target.result;
+            // Book Storage Core Store
+            if(!databaseRef.objectStoreNames.contains("books")) {
+                databaseRef.createObjectStore("books", { keyPath: "bookKey" });
+            }
+            // Application Configuration Storage Store
+            if(!databaseRef.objectStoreNames.contains("settings")) {
+                databaseRef.createObjectStore("settings", { keyPath: "configKey" });
+            }
+        };
+
+        request.onsuccess = function(e) {
+            db = e.target.result;
+            loadApplicationSettingsManifest().then(resolve);
+        };
+
+        request.onerror = function(e) {
+            console.error("Database structural subsystem failure:", e.target.error);
+            reject(e.target.error);
+        };
+    });
+}
+
+async function loadApplicationSettingsManifest() {
+    activeVocabDictionary = JSON.parse(localStorage.getItem("global_vocab_registry") || "[]");
+    updateVocabUIBadgeCounters();
+    
+    // Attempt parsing settings from IndexedDB
+    const cachedSettings = await getStoreRecord("settings", "user_preferences");
+    if(cachedSettings) {
+        if(cachedSettings.theme === "light") document.body.classList.add("light-theme");
+        globalPlaybackRateMultiplier = cachedSettings.playbackRate || 1.0;
+        document.getElementById("slider-audio-rate").value = globalPlaybackRateMultiplier;
+        document.getElementById("label-rate-slider").innerText = `Narration Speed Rate: ${globalPlaybackRateMultiplier}x`;
+    }
+}
+
+function saveApplicationSettingsManifest() {
+    localStorage.setItem("global_vocab_registry", JSON.stringify(activeVocabDictionary));
+    updateVocabUIBadgeCounters();
+    
+    setStoreRecord("settings", {
+        configKey: "user_preferences",
+        theme: document.body.classList.contains("light-theme") ? "light" : "dark",
+        playbackRate: globalPlaybackRateMultiplier,
+        lastActiveBookKey: currentBookKey
+    });
+}
+
+function getStoreRecord(storeName, key) {
+    return new Promise((resolve) => {
+        if (!db) return resolve(null);
+        const transaction = db.transaction([storeName], "readonly");
+        const store = transaction.objectStore(storeName);
+        const request = store.get(key);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => resolve(null);
+    });
+}
+
+function setStoreRecord(storeName, value) {
+    return new Promise((resolve) => {
+        if (!db) return resolve();
+        const transaction = db.transaction([storeName], "readwrite");
+        const store = transaction.objectStore(storeName);
+        const request = store.put(value);
+        request.onsuccess = () => resolve();
+        request.onerror = (e) => { console.error("Write structural storage fail:", e.target.error); resolve(); };
+    });
+}
+
+function getAllStoreRecords(storeName) {
+    return new Promise((resolve) => {
+        if (!db) return resolve([]);
+        const transaction = db.transaction([storeName], "readonly");
+        const store = transaction.objectStore(storeName);
+        const request = store.getAll();
+        request.onsuccess = () => resolve(request.result || []);
+        request.onerror = () => resolve([]);
+    });
+}
+
+function deleteStoreRecord(storeName, key) {
+    return new Promise((resolve) => {
+        if (!db) return resolve();
+        const transaction = db.transaction([storeName], "readwrite");
+        const store = transaction.objectStore(storeName);
+        const request = store.delete(key);
+        request.onsuccess = () => resolve();
+    });
+}
+
+/**
+ * LEAST RECENTLY USED (LRU) BINARY PRUNING STRUCTURAL SUB-ROUTINE
+ * Automatically scales down device memory use by dropping massive text data packages.
+ */
+async function executePruneStorageEngineLoop() {
+    const records = await getAllStoreRecords("books");
+    if(records.length <= 3) return; // Retain top 3 local books safely
+    
+    // Sort ascending based on timestamp mapping variables
+    records.sort((a, b) => (a.lastAccessedTimestamp || 0) - (b.lastAccessedTimestamp || 0));
+    const targetToPrune = records[0];
+    
+    // Clear heavy binary object references while preserving metadata logs and annotations
+    targetToPrune.binaryPayloadDataBlock = null; 
+    await setStoreRecord("books", targetToPrune);
+    console.log(`Storage optimization engine compiled. Offloaded binary cache for book: ${targetToPrune.title}`);
+}
+
+/**
+ * SCREEN WAKE LOCK MANAGER
+ */
+async function requestScreenWakeLockToken() {
+    if ('wakeLock' in navigator) {
+        try {
+            activeWakeLockToken = await navigator.wakeLock.request('screen');
+        } catch (err) {
+            console.warn(`Wake Lock initialization failed: ${err.message}`);
+        }
+    }
+}
+
+function releaseScreenWakeLockToken() {
+    if (activeWakeLockToken) {
+        activeWakeLockToken.release().then(() => { activeWakeLockToken = null; });
+    }
+}
+
+/**
+ * DIGITAL BOOKSHELF UI DRAW LOGIC RENDER CODES
+ */
+async function refreshBookshelfDisplayGrid() {
+    const shelfContainer = document.getElementById("library-shelf-container");
+    shelfContainer.innerHTML = "";
+    
+    const savedBooks = await getAllStoreRecords("books");
+    if(savedBooks.length === 0) {
+        shelfContainer.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: var(--text-secondary); margin-top:20px;">Your library shelf is empty.</div>`;
+        return;
+    }
+    
+    savedBooks.forEach(bookItem => {
+        const card = document.createElement("div");
+        card.className = "book-card";
+        
+        let coverStyle = "";
+        if (bookItem.coverImageBase64DataURI) {
+            coverStyle = `style="background-image: url('${bookItem.coverImageBase64DataURI}'); font-size: 0;"`;
+        }
+        
+        card.innerHTML = `
+            <div class="book-cover-placeholder" ${coverStyle}>EPUB</div>
+            <div class="book-title-label">${bookItem.title || bookItem.fileName}</div>
+            <div class="book-progress-badge">Progress: ${bookItem.readingPercentageProgress || 0}%</div>
+            <button class="btn-delete-book" data-key="${bookItem.bookKey}" style="margin-top:8px; font-size:11px; padding:2px 6px; background:rgba(231,76,60,0.2); border-color:rgba(231,76,60,0.4);">Delete</button>
+        `;
+        
+        card.addEventListener("click", (e) => {
+            if(e.target.classList.contains("btn-delete-book")) return;
+            loadBookIntoActiveViewport(bookItem.bookKey);
+            document.getElementById("panel-library").classList.remove("active");
+        });
+        
+        card.querySelector(".btn-delete-book").addEventListener("click", async (e) => {
+            e.stopPropagation();
+            if(confirm("Confirm deletion of this book metadata and structural profile?")) {
+                await deleteStoreRecord("books", bookItem.bookKey);
+                refreshBookshelfDisplayGrid();
+            }
+        });
+        
+        shelfContainer.appendChild(card);
+    });
+}
+
+/**
+ * EPUB ENGINE RENDER INTERFACE LIFECYCLE
+ */
+async function importLocalEpubFile(fileObject) {
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+        const buffer = e.target.result;
+        const initialBook = ePub(buffer);
+        
+        try {
+            const metadata = await initialBook.loaded.metadata;
+            const bookKey = "book_" + Date.now();
+            
+            let coverImageBase64DataURI = null;
+            try {
+                const coverUrl = await initialBook.coverUrl();
+                if (coverUrl) {
+                    const response = await fetch(coverUrl);
+                    const blob = await response.blob();
+                    coverImageBase64DataURI = await new Promise((res) => {
+                        const r = new FileReader();
+                        r.onloadend = () => res(r.result);
+                        r.readAsDataURL(blob);
+                    });
+                }
+            } catch(coverErr) { console.warn("Cover rendering skipped:", coverErr); }
+
+            const bookProfileRecord = {
+                bookKey: bookKey,
+                title: metadata.title,
+                author: metadata.creator,
+                fileName: fileObject.name,
+                binaryPayloadDataBlock: buffer,
+                coverImageBase64DataURI: coverImageBase64DataURI,
+                lastCfiCoordinatesPointer: null,
+                readingPercentageProgress: 0,
+                lastAccessedTimestamp: Date.now(),
+                annotationsManifestArray: []
+            };
+            
+            await setStoreRecord("books", bookProfileRecord);
+            await executePruneStorageEngineLoop();
+            refreshBookshelfDisplayGrid();
+            loadBookIntoActiveViewport(bookKey);
+        } catch(err) {
+            alert("Error parsing internal EPUB schema structural layers: " + err.message);
+        }
+    };
+    reader.readAsArrayBuffer(fileObject);
+}
+
+async function loadBookIntoActiveViewport(bookKey) {
+    terminateAudioEnginePlayback();
+    
+    let bookRecord = await getStoreRecord("books", bookKey);
+    if(!bookRecord) return;
+    
+    // Re-verify binary integrity block (if cleared out via background automatic LRU loop operations)
+    if(!bookRecord.binaryPayloadDataBlock) {
+        alert("The binary structure data block for this book was compressed or cleared out automatically. Please import the file archive link once again to resume configuration tracks.");
+        return;
+    }
+    
+    bookRecord.lastAccessedTimestamp = Date.now();
+    await setStoreRecord("books", bookRecord);
+    
+    currentBookKey = bookKey;
+    document.getElementById("display-book-title").innerText = bookRecord.title || bookRecord.fileName;
+    
+    // Flush past instance viewports
+    if(currentRenditionInstance) currentRenditionInstance.destroy();
+    
+    currentBookInstance = ePub(bookRecord.binaryPayloadDataBlock);
+    
+    // Map structural layers container sizing
+    currentRenditionInstance = currentBookInstance.renderTo("book-viewer", {
+        width: "100%",
+        height: "100%",
+        flow: "paginated",
+        manager: "default"
+    });
+    
+    // Load historical annotations reference list configuration layers
+    localHighlightsManifest = {};
+    if(bookRecord.annotationsManifestArray) {
+        bookRecord.annotationsManifestArray.forEach(item => {
+            localHighlightsManifest[item.cfi] = item;
+        });
+    }
+    
+    // Hook Event: Initial Display Layout Render Complete Hooks
+    currentRenditionInstance.display(bookRecord.lastCfiCoordinatesPointer || undefined);
+    
+    // Apply theme contrast layer properties injections
+    applyViewportInjectedStylesheets();
+    
+    // Hook Interceptor Event Listeners
+    currentRenditionInstance.on("selected", handleTextSelectionAction);
+    currentRenditionInstance.on("relocated", handleLocationChangedTransitionEvent);
+    
+    // Apply Highlight Render hooks onto chapter loads
+    currentRenditionInstance.on("rendered", (section, view) => {
+        injectCustomGestureDetectorHooks(view);
+        reapplyStoredHighlightsToActiveSection(view);
+    });
+
+    requestScreenWakeLockToken();
+    saveApplicationSettingsManifest();
+}
+
+function applyViewportInjectedStylesheets() {
+    if(!currentRenditionInstance) return;
+    const isLight = document.body.classList.contains("light-theme");
+    
+    // High Contrast Protection Matrix Injections
+    currentRenditionInstance.themes.default({
+        "body": {
+            "background-color": "transparent !important",
+            "color": isLight ? "#2b2b2b !important" : "#e0e0e0 !important"
+        },
+        "p, span, h1, h2, h3, h4, h5, h6, li, a": {
+            "color": "inherit !important",
+            "background-color": "transparent !important"
+        },
+        "::selection": {
+            "background": "rgba(0, 173, 181, 0.3) !important"
+        }
+    });
+}
+
+async function handleLocationChangedTransitionEvent(location) {
+    if(!currentBookInstance || !currentBookKey) return;
+    
+    const currentCfi = location.start.cfi;
+    const bookRecord = await getStoreRecord("books", currentBookKey);
+    if(bookRecord) {
+        bookRecord.lastCfiCoordinatesPointer = currentCfi;
+        
+        // Calculate structural file location progress percentage indicators
+        if(currentBookInstance.locations && currentBookInstance.locations.length > 0) {
+            const progress = Math.round(currentBookInstance.locations.percentageFromCfi(currentCfi) * 100);
+            bookRecord.readingPercentageProgress = isNaN(progress) ? 0 : progress;
+        } else {
+            bookRecord.readingPercentageProgress = 0; 
+        }
+        
+        await setStoreRecord("books", bookRecord);
+    }
+    
+    // If text tracking loop is active, build the structural layout text node parsing queues
+    if(isAudioCurrentlyPlaying) {
+        compileTextAudioSpineQueueElements();
+    }
+}
+
+/**
+ * COMPREHENSIVE TEXT SELECTION & PERSISTENT HIGHLIGHT ENGINE
+ */
+function handleTextSelectionAction(cfiRange, contents) {
+    currentRenditionInstance.annotations.add("highlight", cfiRange, {}, null, "vocab-highlight", {
+        "fill": "var(--highlight-color)", "fill-opacity": "1"
+    });
+    
+    // Intercept exact selected characters payload blocks
+    currentBookInstance.getRange(cfiRange).then(async (range) => {
+        const textPayload = range.toString().trim();
+        if(!textPayload) return;
+        
+        // Push configuration blocks array data fields to local highlight maps structure records
+        const annotationItem = { cfi: cfiRange, text: textPayload, dateAdded: Date.now() };
+        localHighlightsManifest[cfiRange] = annotationItem;
+        
+        await updateStoredAnnotationsDatabasePayload();
+        
+        // Trigger automated mini-lookup configuration window structures on immediate text selections
+        executeInlineDictionaryLookupRequest(textPayload);
+    });
+}
+
+async function updateStoredAnnotationsDatabasePayload() {
+    if(!currentBookKey) return;
+    const bookRecord = await getStoreRecord("books", currentBookKey);
+    if(bookRecord) {
+        bookRecord.annotationsManifestArray = Object.values(localHighlightsManifest);
+        await setStoreRecord("books", bookRecord);
+    }
+}
+
+function reapplyStoredHighlightsToActiveSection(view) {
+    Object.keys(localHighlightsManifest).forEach(cfiKey => {
+        currentRenditionInstance.annotations.add("highlight", cfiKey, {}, null, "vocab-highlight", {
+            "fill": "var(--highlight-color)"
+        });
+    });
+}
+
+/**
+ * GESTURE LAYER INTERCEPTOR HOOKS
+ * Injects granular single/double-tap detection directly inside the iframe context window container.
+ */
+function injectCustomGestureDetectorHooks(view) {
+    const iframeDocumentTarget = view.document;
+    
+    // Force reset browser default select layouts context styling blocks within runtime frames
+    const styleNode = iframeDocumentTarget.createElement("style");
+    styleNode.innerHTML = `* { -webkit-tap-highlight-color: transparent !important; }`;
+    iframeDocumentTarget.head.appendChild(styleNode);
+    
+    iframeDocumentTarget.body.addEventListener("click", function(e) {
+        const tappedNodeElement = e.target;
+        const completeTextString = tappedNodeElement.innerText || "";
+        
+        if (clientTouchInteractionTimerRef === null) {
+            // First Tap Registered -> Queue Execution Block Setup for Single Paragraph Reads
+            clientTouchInteractionTimerRef = setTimeout(() => {
+                clientTouchInteractionTimerRef = null;
+                
+                // Fire Context Text Segment Node Track Parsing Pipeline
+                if(completeTextString.trim().length > 3) {
+                    initiateTargetedParagraphAudioLoop(tappedNodeElement);
+                }
+            }, 250); 
+        } else {
+            // Consecutive Tap Intercepted -> Halt Single Click Queue and Pivot Instantly to Word Definition Lookup Engine
+            clearTimeout(clientTouchInteractionTimerRef);
+            clientTouchInteractionTimerRef = null;
+            
+            const selectedWordText = getSelectedWordFromContextCoordinates(e);
+            if(selectedWordText && selectedWordText.length > 0) {
+                executeInlineDictionaryLookupRequest(selectedWordText);
+            }
+        }
+    });
+}
+
+function getSelectedWordFromContextCoordinates(clickEvent) {
+    const documentRef = clickEvent.target.ownerDocument;
+    let textRange, selectedWordString = "";
+    
+    if (documentRef.caretPositionFromPoint) {
+        const pos = documentRef.caretPositionFromPoint(clickEvent.clientX, clickEvent.clientY);
+        textRange = documentRef.createRange();
+        textRange.setStart(pos.offsetNode, pos.offset);
+        textRange.setEnd(pos.offsetNode, pos.offset);
+    } else if (documentRef.caretRangeFromPoint) {
+        textRange = documentRef.caretRangeFromPoint(clickEvent.clientX, clickEvent.clientY);
+    }
+    
+    if (textRange && textRange.startContainer.nodeType === Node.TEXT_NODE) {
+        const fullTextData = textRange.startContainer.data;
+        const currentOffsetIndex = textRange.startOffset;
+        
+        // Find left and right bounds matching standard alpha string characters regex parameters
+        const leftMatch = fullTextData.substring(0, currentOffsetIndex).match(/[a-zA-Z\s\u4e00-\u9fa5]+$/);
+        const rightMatch = fullTextData.substring(currentOffsetIndex).match(/^[a-zA-Z\s\u4e00-\u9fa5]+/);
+        
+        let targetSegment = "";
+        if(leftMatch) targetSegment += leftMatch[0];
+        if(rightMatch) targetSegment += rightMatch[0];
+        
+        // Filter extracted block down into isolation terms
+        const wordTokens = targetSegment.trim().split(/[\s,.\-\"\']+/);
+        if(wordTokens.length > 0) {
+            // Extract token closest to touch coordinates interface metrics
+            selectedWordString = wordTokens[wordTokens.length - 1]; 
+        }
+    }
+    return selectedWordString.replace(/[^a-zA-Z\u4e00-\u9fa5]/g, "");
+}
+
+/**
+ * SIMULATED CLOUD TRANSLATION DICTIONARY ENGINE (GEMINI INTERFACE CONTAINER PROXY BRIDGE)
+ */
+let temporaryActiveLookupPayloadObject = null;
+
+function executeInlineDictionaryLookupRequest(rawTermString) {
+    const wordClean = rawTermString.trim().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"']/g,"");
+    if(wordClean.length === 0) return;
+    
+    document.getElementById("lookup-target-word").innerText = wordClean;
+    document.getElementById("lookup-loading-spinner").style.display = "block";
+    document.getElementById("lookup-payload-content").style.display = "none";
+    document.getElementById("lookup-modal").style.display = "block";
+    
+    // Simulate API connection interface processing loops locally 
+    setTimeout(() => {
+        document.getElementById("lookup-loading-spinner").style.display = "none";
+        document.getElementById("lookup-payload-content").style.display = "block";
+        
+        // Generate baseline semantic mocks mapping contextual definitions to the new flat string schema
+        const simulatedChineseTranslation = `Simulated Dictionary Entry for: "${wordClean}" (noun/verb).\n无产阶级，劳工阶层：意思是匹配此处的文本上下文。`;
+        document.getElementById("lookup-translation-text").innerText = simulatedChineseTranslation;
+        
+        temporaryActiveLookupPayloadObject = {
+            id: "vocab_" + Date.now(),
+            // Capitalized properties to match the new format
+            "Word": wordClean,
+            "Meaning Explanation": simulatedChineseTranslation,
+            "Usage Example 1": `This is a contextual usage configuration sentence sample mapping the term: ${wordClean}.\n这是一个包含目标词汇的上下文应用示例句型结构。`,
+            "Usage Example 2": `Another example showcasing how ${wordClean} is integrated inside technical literature workflows.\n另一个展示该词汇如何融入技术文献工作流程的示例。`,
+            "Usage Example 3": `The author masterfully deployed the concept of ${wordClean} within this specific dynamic sequence.\n作者在这一特定动态序列中驾轻就熟地运用了这一概念。`,
+            "Usage Example 4": `Continuous repetition of ${wordClean} ensures long-term active memory consolidation profiles.\n持续重复记忆该词汇可确保长期主动记忆巩固。`,
+            "Usage Example 5": `Verify the structural integrity of ${wordClean} across multiple sample runs.\n在多次样本运行中验证该词汇的结构完整性。`,
+            "Usage Example 6": `An advanced vocabulary template structure utilizing ${wordClean} flawlessly.\n一个完美利用该词汇的高级词汇模板结构。`
+        };
+    }, 800);
+}
+
+function saveTemporaryPayloadIntoMasterVocabLog() {
+    if(!temporaryActiveLookupPayloadObject) return;
+    
+    // Prevent duplicated entity keys records matching the updated schema structure
+    const absoluteDuplicateFound = activeVocabDictionary.some(item => item.Word && item.Word.toLowerCase() === temporaryActiveLookupPayloadObject.Word.toLowerCase());
+    if(!absoluteDuplicateFound) {
+        activeVocabDictionary.unshift(temporaryActiveLookupPayloadObject);
+        saveApplicationSettingsManifest();
+        renderVocabDashboardCardsView();
+    }
+    document.getElementById("lookup-modal").style.display = "none";
+    temporaryActiveLookupPayloadObject = null;
+}
+
+/**
+ * HIGH-PERFORMANCE AUDIO NARRATION & BILINGUAL TEXT-TO-SPEECH (TTS) INFRASTRUCTURE
+ */
+function initializeVoiceProfileSelectors() {
+    if(typeof speechSynthesis === 'undefined') return;
+    
+    let voices = speechSynthesis.getVoices();
+    
+    function appendVoiceOptions() {
+        const selectEn = document.getElementById("select-voice-en");
+        const selectZh = document.getElementById("select-voice-zh");
+        
+        selectEn.innerHTML = "";
+        selectZh.innerHTML = "";
+        
+        voices.forEach(voice => {
+            const opt = document.createElement("option");
+            opt.value = voice.name;
+            opt.innerText = `${voice.name} (${voice.lang})`;
+            
+            if(voice.lang.startsWith("en")) {
+                selectEn.appendChild(opt.cloneNode(true));
+            } else if (voice.lang.startsWith("zh") || voice.lang.startsWith("cs")) {
+                selectZh.appendChild(opt.cloneNode(true));
+            }
+        });
+        
+        // Auto-assign default profiles targeting enhanced high-quality bundles
+        if(!preferredEnglishVoiceProfile && selectEn.options.length > 0) {
+            preferredEnglishVoiceProfile = voices.find(v => v.lang.startsWith("en") && v.name.includes("Google")) || voices.find(v => v.lang.startsWith("en"));
+            if(preferredEnglishVoiceProfile) selectEn.value = preferredEnglishVoiceProfile.name;
+        }
+        if(!preferredMandarinVoiceProfile && selectZh.options.length > 0) {
+            preferredMandarinVoiceProfile = voices.find(v => (v.lang.startsWith("zh") || v.lang.startsWith("cs")) && v.name.includes("Google")) || voices.find(v => v.lang.startsWith("zh"));
+            if(preferredMandarinVoiceProfile) selectZh.value = preferredMandarinVoiceProfile.name;
+        }
+    }
+    
+    appendVoiceOptions();
+    if (speechSynthesis.onvoiceschanged !== undefined) {
+        speechSynthesis.onvoiceschanged = () => {
+            voices = speechSynthesis.getVoices();
+            appendVoiceOptions();
+        };
+    }
+}
+
+function compileTextAudioSpineQueueElements() {
+    if(!currentRenditionInstance || !currentRenditionInstance.getContents()[0]) return;
+    
+    const viewIframeDocument = currentRenditionInstance.getContents()[0].document;
+    // Query structural elements containing readable block tokens
+    const structuralParagraphElements = Array.from(viewIframeDocument.querySelectorAll("p, h1, h2, h3, li"));
+    
+    speechEngineQueueArray = structuralParagraphElements.map((el, index) => {
+        return {
+            domReferenceNode: el,
+            textPayloadContent: el.innerText || "",
+            indexPointer: index
+        };
+    }).filter(item => item.textPayloadContent.trim().length > 2);
+}
+
+function initiateTargetedParagraphAudioLoop(targetDomHtmlElement) {
+    terminateAudioEnginePlayback();
+    compileTextAudioSpineQueueElements();
+    
+    // Find index matching the exact single clicked dom text element reference node pointer
+    const matchIndex = speechEngineQueueArray.findIndex(item => item.domReferenceNode === targetDomHtmlElement || item.domReferenceNode.contains(targetDomHtmlElement));
+    
+    if(matchIndex !== -1) {
+        currentSpeechItemPointerIndex = matchIndex;
+        isAudioCurrentlyPlaying = true;
+        document.getElementById("btn-audio-play").innerText = "⏸️ Pause";
+        executeCurrentQueueAudioTrack();
+    }
+}
+
+function executeCurrentQueueAudioTrack() {
+    speechSynthesis.cancel(); // Flush hardware speech channel pipelines
+    
+    if(!isAudioCurrentlyPlaying || currentSpeechItemPointerIndex < 0 || currentSpeechItemPointerIndex >= speechEngineQueueArray.length) {
+        terminateAudioEnginePlayback();
+        return;
+    }
+    
+    const trackItem = speechEngineQueueArray[currentSpeechItemPointerIndex];
+    
+    // Clear styling overrides from historical active sentences
+    speechEngineQueueArray.forEach(item => {
+        if(item.domReferenceNode && item.domReferenceNode.style) {
+            item.domReferenceNode.style.backgroundColor = "transparent";
+        }
+    });
+    
+    // Highlight currently playing target node structure layer
+    if(trackItem.domReferenceNode && trackItem.domReferenceNode.style) {
+        trackItem.domReferenceNode.style.backgroundColor = "var(--highlight-color)";
+        trackItem.domReferenceNode.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    
+    const utterance = new SpeechSynthesisUtterance(trackItem.textPayloadContent);
+    if(preferredEnglishVoiceProfile) utterance.voice = preferredEnglishVoiceProfile;
+    utterance.rate = globalPlaybackRateMultiplier;
+    
+    // Karaoke Tracking Event Boundaries Hooks Initialization
+    utterance.onboundary = function(event) {
+        if(event.name === 'sentence') {
+            // Optional advanced sub-sentence highlighter rules can inject here safely
+        }
+    };
+    
+    utterance.onend = function() {
+        if(isAudioCurrentlyPlaying) {
+            currentSpeechItemPointerIndex++;
+            executeCurrentQueueAudioTrack();
+        }
+    };
+    
+    utterance.onerror = function(e) {
+        console.error("TTS output runtime exception channel intercept:", e);
+    };
+    
+    speechSynthesis.speak(utterance);
+    updateMobileMediaSessionMetadata(trackItem.textPayloadContent);
+}
+
+function toggleAudioEnginePlayPauseState() {
+    if(!currentBookInstance) return;
+    
+    if(isAudioCurrentlyPlaying) {
+        // Pivot to paused state operations
+        speechSynthesis.pause();
+        isAudioCurrentlyPlaying = false;
+        document.getElementById("btn-audio-play").innerText = "▶️ Resume";
+    } else {
+        isAudioCurrentlyPlaying = true;
+        document.getElementById("btn-audio-play").innerText = "⏸️ Pause";
+        
+        if(speechSynthesis.paused) {
+            speechSynthesis.resume();
+        } else {
+            if(speechEngineQueueArray.length === 0 || currentSpeechItemPointerIndex === -1) {
+                compileTextAudioSpineQueueElements();
+                currentSpeechItemPointerIndex = 0;
+            }
+            executeCurrentQueueAudioTrack();
+        }
+    }
+}
+
+function terminateAudioEnginePlayback() {
+    speechSynthesis.cancel();
+    isAudioCurrentlyPlaying = false;
+    document.getElementById("btn-audio-play").innerText = "▶️ Read";
+    
+    speechEngineQueueArray.forEach(item => {
+        if(item.domReferenceNode && item.domReferenceNode.style) {
+            item.domReferenceNode.style.backgroundColor = "transparent";
+        }
+    });
+    currentSpeechItemPointerIndex = -1;
+}
+
+/**
+ * NATIVE ANDROID MEDIA SESSION API SYNC CONTROL OPERATIONS (LOCK-SCREEN INTERFACE)
+ */
+function updateMobileMediaSessionMetadata(activePhraseContentSnippet) {
+    if ('mediaSession' in navigator) {
+        const titleText = document.getElementById("display-book-title").innerText;
+        
+        navigator.mediaSession.metadata = new MediaMetadata({
+            title: titleText,
+            artist: "Smart PWA Narrator Engine",
+            album: "Active E-Reader Loop Workspace",
+            artwork: [
+                { src: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"><rect width="128" height="128" fill="%2300adb5"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="48" fill="white">B</text></svg>', sizes: '128x128', type: 'image/svg+xml' }
+            ]
+        });
+        
+        navigator.mediaSession.setActionHandler('play', () => { toggleAudioEnginePlayPauseState(); });
+        navigator.mediaSession.setActionHandler('pause', () => { toggleAudioEnginePlayPauseState(); });
+        navigator.mediaSession.setActionHandler('stop', () => { terminateAudioEnginePlayback(); });
+        navigator.mediaSession.setActionHandler('nexttrack', () => {
+            if(currentSpeechItemPointerIndex < speechEngineQueueArray.length - 1) {
+                currentSpeechItemPointerIndex++;
+                executeCurrentQueueAudioTrack();
+            }
+        });
+        navigator.mediaSession.setActionHandler('previoustrack', () => {
+            if(currentSpeechItemPointerIndex > 0) {
+                currentSpeechItemPointerIndex--;
+                executeCurrentQueueAudioTrack();
+            }
+        });
+    }
+}
+
+/**
+ * OFFLINE BOOK GLOBAL SPINE TEXT SEARCH ENGINE ROUTINES
+ */
+async function executeGlobalBookTextSpineSearch() {
+    const query = document.getElementById("input-search-query").value.trim();
+    const resultsContainer = document.getElementById("search-results-target");
+    resultsContainer.innerHTML = `<div style="color:var(--text-secondary); font-style:italic;">Scanning full internal text spine, please stand by...</div>`;
+    
+    if(!currentBookInstance || !query) {
+        resultsContainer.innerHTML = `<div style="color:var(--text-secondary);">Query parameters are empty or no book instance loaded.</div>`;
+        return;
+    }
+    
+    const searchResultsMatchesArray = [];
+    const spineRef = currentBookInstance.spine;
+    
+    // Sequentially item-load text matrices without UI paint blockers
+    for(let i = 0; i < spineRef.length; i++) {
+        const spineSectionItem = spineRef.get(i);
+        await spineSectionItem.load(currentBookInstance.load.bind(currentBookInstance));
+        const elementDocument = spineSectionItem.document;
+        const bodyContentText = elementDocument.body.innerText || "";
+        
+        let positionPointer = bodyContentText.toLowerCase().indexOf(query.toLowerCase());
+        while(positionPointer !== -1) {
+            const startSnippetBound = Math.max(0, positionPointer - 40);
+            const endSnippetBound = Math.min(bodyContentText.length, positionPointer + query.length + 60);
+            let contextSnippetText = bodyContentText.substring(startSnippetBound, endSnippetBound).replace(/\n/g, " ");
+            
+            // Highlight text structure layers matched strings
+            const regexMatcher = new RegExp(`(${query})`, "gi");
+            contextSnippetText = contextSnippetText.replace(regexMatcher, "<mark>$1</mark>");
+            
+            // Map fake CFI references jumping clean to estimated chapter sections bounds
+            searchResultsMatchesArray.push({
+                cfiTarget: spineSectionItem.cfiBase,
+                snippetText: `...${contextSnippetText}...`
+            });
+            
+            positionPointer = bodyContentText.toLowerCase().indexOf(query.toLowerCase(), positionPointer + 1);
+        }
+        spineSectionItem.unload();
+    }
+    
+    resultsContainer.innerHTML = "";
+    if(searchResultsMatchesArray.length === 0) {
+        resultsContainer.innerHTML = `<div style="color:var(--text-secondary);">No absolute matching phrases detected within the spine indexes.</div>`;
+        return;
+    }
+    
+    searchResultsMatchesArray.forEach(match => {
+        const item = document.createElement("div");
+        item.className = "search-result-snippet";
+        item.innerHTML = match.snippetText;
+        item.addEventListener("click", () => {
+            currentRenditionInstance.display(match.cfiTarget);
+            document.getElementById("panel-search").classList.remove("active");
+        });
+        resultsContainer.appendChild(item);
+    });
+}
+
+/**
+ * DYNAMIC AUDIO REVIEW MODULE WORKSPACE ENGINE (VOCABULARY DASHBOARD)
+ */
+function updateVocabUIBadgeCounters() {
+    const len = activeVocabDictionary.length;
+    document.getElementById("vocab-badge").innerText = len;
+}
+
+function renderVocabDashboardCardsView() {
+    const listTarget = document.getElementById("vocab-cards-list-target");
+    listTarget.innerHTML = "";
+    
+    if(activeVocabDictionary.length === 0) {
+        listTarget.innerHTML = `<p style="text-align:center; color:var(--text-secondary); padding:40px 0;">No active vocabulary log metadata entries tracked yet.</p>`;
+        return;
+    }
+    
+    activeVocabDictionary.forEach((item) => {
+        // Standardize properties fallback mechanism just in case old formats are present in storage
+        const wordString = item.Word || item.word || "Unknown";
+        const explanationString = item["Meaning Explanation"] || item.definition || "";
+        const idString = item.id || ("vocab_" + Date.now() + Math.random());
+
+        const card = document.createElement("div");
+        card.className = "vocab-card";
+        card.id = `card-id-${idString}`;
+        
+        card.innerHTML = `
+            <div class="vocab-card-main">
+                <div>
+                    <div class="vocab-word-title">
+                        <span>${wordString}</span>
+                        <button class="btn-speak-vocab-word" style="padding:2px 6px; font-size:12px;">🔊 Speak</button>
+                    </div>
+                    <div class="vocab-definition-block">${explanationString}</div>
+                </div>
+                <button class="btn-prune-vocab-card" style="background:rgba(231,76,60,0.15); border-color:rgba(231,76,60,0.3); color:#e74c3c;">Delete</button>
+            </div>
+            <div class="vocab-examples-toggle">▶️ Show 6 Context Examples</div>
+            <div class="vocab-examples-panel"></div>
+        `;
+        
+        // Populate nested contextual translation loop blocks dynamically out of flat keys
+        const examplesPanel = card.querySelector(".vocab-examples-panel");
+        
+        for (let i = 1; i <= 6; i++) {
+            // Find the item either from unified string token keys or matching legacy format array keys
+            let rawExample = item[`Usage Example ${i}`];
+            let exEn = "";
+            let exZh = "";
+
+            if (rawExample) {
+                const parts = rawExample.split('\n');
+                exEn = parts[0] || "";
+                exZh = parts[1] || "";
+            } else if (item.examples && item.examples[i - 1]) {
+                exEn = item.examples[i - 1].en || "";
+                exZh = item.examples[i - 1].zh || "";
+            }
+
+            if (exEn || exZh) {
+                const row = document.createElement("div");
+                row.className = "example-item-row";
+                row.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                        <div class="ex-en-text" style="font-weight:500;">${i}. ${exEn}</div>
+                        <button class="btn-speak-example-chain" data-en="${escape(exEn)}" data-zh="${escape(exZh)}" style="padding:1px 4px; font-size:10px; margin-left:8px;">🔊 Listen</button>
+                    </div>
+                    <div class="example-translation ex-zh-text">${exZh}</div>
+                `;
+                examplesPanel.appendChild(row);
+            }
+        }
+        
+        // Event Listeners Configuration
+        card.querySelector(".vocab-examples-toggle").addEventListener("click", function() {
+            const isOpen = examplesPanel.classList.toggle("open");
+            this.innerText = isOpen ? "▼ Hide Context Examples" : "▶️ Show 6 Context Examples";
+        });
+        
+        card.querySelector(".btn-speak-vocab-word").addEventListener("click", () => {
+            executeTargetedBilingualSpeechChain(wordString, explanationString);
+        });
+        
+        card.querySelectorAll(".btn-speak-example-chain").forEach(btn => {
+            btn.addEventListener("click", function() {
+                const targetEn = unescape(this.getAttribute("data-en"));
+                const targetZh = unescape(this.getAttribute("data-zh"));
+                executeTargetedBilingualSpeechChain(targetEn, targetZh);
+            });
+        });
+        
+        card.querySelector(".btn-prune-vocab-card").addEventListener("click", () => {
+            if(confirm(`Remove "${wordString}" from master database log lists?`)) {
+                activeVocabDictionary = activeVocabDictionary.filter(v => (v.Word || v.word) !== wordString);
+                saveApplicationSettingsManifest();
+                renderVocabDashboardCardsView();
+            }
+        });
+        
+        listTarget.appendChild(card);
+    });
+}
+
+function executeTargetedBilingualSpeechChain(englishStringText, mandarinStringText) {
+    speechSynthesis.cancel();
+    
+    // Strip layout line breaks or meta descriptions before playing to avoid literal readings of system code
+    const cleanEn = englishStringText.split('\n')[0].replace(/\[Translation\]|Simulated Dictionary Entry for:/gi, "").trim();
+    const cleanZh = mandarinStringText.includes('\n') ? mandarinStringText.split('\n')[1] : mandarinStringText.replace(/\[Translation\]|Simulated Dictionary Entry for:/gi, "").trim();
+
+    // Segment 1: Enforce high-fidelity native English audio profile configuration layers
+    const utteranceEn = new SpeechSynthesisUtterance(cleanEn);
+    if(preferredEnglishVoiceProfile) utteranceEn.voice = preferredEnglishVoiceProfile;
+    utteranceEn.rate = globalPlaybackRateMultiplier;
+    
+    // Intercept exact operational end of segment 1 timeline frames
+    utteranceEn.onend = function() {
+        if (!cleanZh) return;
+        // Segment 2: Instantly trigger language translation voice engine switches matching Mandarin locales
+        const utteranceZh = new SpeechSynthesisUtterance(cleanZh);
+        if(preferredMandarinVoiceProfile) utteranceZh.voice = preferredMandarinVoiceProfile;
+        utteranceZh.rate = Math.max(0.9, globalPlaybackRateMultiplier - 0.1); // Slightly reduce pace for clearer tonal definition
+        speechSynthesis.speak(utteranceZh);
+    };
+    
+    speechSynthesis.speak(utteranceEn);
+}
+
+function exportVocabDictionaryToLocalJsonFile() {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(activeVocabDictionary, null, 2));
+    const downloadAnchor = document.createElement("a");
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `vocab_export_${Date.now()}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+}
+
+/**
+ * APPLICATION SYSTEM INITIALIZATION & EVENT LEADS CAPTURE HOOKS
+ */
+window.addEventListener("DOMContentLoaded", async () => {
+    await initDatabaseStorageEngine();
+    initializeVoiceProfileSelectors();
+    refreshBookshelfDisplayGrid();
+    
+    // Toolbar Interface Component Connectors
+    document.getElementById("btn-library").addEventListener("click", () => {
+        refreshBookshelfDisplayGrid();
+        document.getElementById("panel-library").classList.toggle("active");
+    });
+    
+    document.getElementById("btn-vocab").addEventListener("click", () => {
+        renderVocabDashboardCardsView();
+        document.getElementById("panel-vocab").classList.add("active");
+    });
+    
+    document.getElementById("btn-vocab-close").addEventListener("click", () => {
+        document.getElementById("panel-vocab").classList.remove("active");
+    });
+
+    document.getElementById("btn-vocab-export").addEventListener("click", () => {
+        exportVocabDictionaryToLocalJsonFile();
+    });
+    
+    document.getElementById("btn-search").addEventListener("click", () => {
+        document.getElementById("panel-search").classList.add("active");
+    });
+    
+    document.getElementById("btn-close-search").addEventListener("click", () => {
+        document.getElementById("panel-search").classList.remove("active");
+    });
+    
+    document.getElementById("btn-theme").addEventListener("click", () => {
+        document.body.classList.toggle("light-theme");
+        applyViewportInjectedStylesheets();
+        saveApplicationSettingsManifest();
+    });
+    
+    // Audio Navigation Control Core Connectors
+    document.getElementById("btn-audio-play").addEventListener("click", toggleAudioEnginePlayPauseState);
+    document.getElementById("btn-audio-stop").addEventListener("click", terminateAudioEnginePlayback);
+    
+    document.getElementById("btn-audio-prev").addEventListener("click", () => {
+        if(currentRenditionInstance) currentRenditionInstance.prev();
+    });
+    
+    document.getElementById("right-hotspot").addEventListener("click", () => {
+        if(currentRenditionInstance) currentRenditionInstance.next();
+    });
+    
+    document.getElementById("left-hotspot").addEventListener("click", () => {
+        if(currentRenditionInstance) currentRenditionInstance.prev();
+    });
+    
+    // Storage & Search Execution Connectors
+    document.getElementById("btn-trigger-upload").addEventListener("click", () => {
+        document.getElementById("file-uploader").click();
+    });
+    
+    document.getElementById("file-uploader").addEventListener("change", (e) => {
+        if(e.target.files.length > 0) importLocalEpubFile(e.target.files[0]);
+    });
+    
+    document.getElementById("btn-execute-search").addEventListener("click", executeGlobalBookTextSpineSearch);
+    
+    // Dropdown/Slider Controls Hooks Configurations
+    document.getElementById("btn-audio-settings").addEventListener("click", () => {
+        const panel = document.getElementById("settings-panel");
+        panel.style.display = panel.style.display === "block" ? "none" : "block";
+    });
+    
+    document.getElementById("btn-close-settings").addEventListener("click", () => {
+        const selectEn = document.getElementById("select-voice-en");
+        const selectZh = document.getElementById("select-voice-zh");
+        const voices = speechSynthesis.getVoices();
+        
+        preferredEnglishVoiceProfile = voices.find(v => v.name === selectEn.value);
+        preferredMandarinVoiceProfile = voices.find(v => v.name === selectZh.value);
+        
+        document.getElementById("settings-panel").style.display = "none";
+        saveApplicationSettingsManifest();
+    });
+    
+    document.getElementById("slider-audio-rate").addEventListener("input", (e) => {
+        globalPlaybackRateMultiplier = parseFloat(e.target.value);
+        document.getElementById("label-rate-slider").innerText = `Narration Speed Rate: ${globalPlaybackRateMultiplier}x`;
+    });
+    
+    // Dialog Component Overlay Click Triggers
+    document.getElementById("btn-close-lookup").addEventListener("click", () => {
+        document.getElementById("lookup-modal").style.display = "none";
+    });
+    
+    document.getElementById("btn-save-lookup-word").addEventListener("click", saveTemporaryPayloadIntoMasterVocabLog);
+    
+    // Page Window Tear-Down Hooks Management
+    window.addEventListener("beforeunload", () => {
+        releaseScreenWakeLockToken();
+    });
+});
+</script>
+</body>
+</html>

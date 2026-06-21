@@ -1,0 +1,21 @@
+{
+  "name": "E-Reader Vocabulary App",
+  "short_name": "E-Reader",
+  "start_url": "/my-ereader/index.html",
+  "scope": "/my-ereader/",
+  "display": "standalone",
+  "background_color": "#121212",
+  "theme_color": "#00adb5",
+  "icons": [
+    {
+      "src": "https://cdn.jsdelivr.net/gh/ytlpowrzf6-hash/my-ereader@main/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://cdn.jsdelivr.net/gh/ytlpowrzf6-hash/my-ereader@main/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
